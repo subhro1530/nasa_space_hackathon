@@ -1,5 +1,6 @@
-import * as THREE from "three";
-import { useEffect } from "react";
+import * as THREE from 'three';
+import { useEffect } from 'react';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 export default function ThreeDScene({ positions }) {
   useEffect(() => {
@@ -15,11 +16,59 @@ export default function ThreeDScene({ positions }) {
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Sun
-    const geometry = new THREE.SphereGeometry(1, 32, 32);
-    const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-    const sun = new THREE.Mesh(geometry, material);
-    scene.add(sun);
+    // Add ambient light
+    const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
+    scene.add(ambientLight);
+
+    // Add directional light with higher intensity
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // Increased intensity
+    directionalLight.position.set(5, 5, 5).normalize();
+    scene.add(directionalLight);
+
+    // Optional: Add a light helper to visualize the light
+    const lightHelper = new THREE.DirectionalLightHelper(directionalLight, 5);
+    scene.add(lightHelper);
+
+    // Load and add the sun model
+    const loader = new GLTFLoader();
+    loader.load('/models/sun.glb', (gltf) => {
+      const sun = gltf.scene;
+
+      // Check and log model materials
+      sun.traverse((child) => {
+        if (child.isMesh) {
+          console.log('Material:', child.material);
+          // Ensure materials are set up correctly
+          if (child.material.map === null) {
+            child.material.color.set(0xffff00); // Default to yellow if no texture
+          }
+          // Ensure material is not using `MeshBasicMaterial` if lighting is used
+          if (child.material instanceof THREE.MeshBasicMaterial) {
+            child.material = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+          }
+        }
+      });
+
+      sun.position.set(0, 0, 0);
+      sun.scale.set(1, 1, 1);
+      scene.add(sun);
+
+      // Rotatable sun
+      const animate = function () {
+        requestAnimationFrame(animate);
+        sun.rotation.y += 0.01; // Rotate the sun around the y-axis
+        renderer.render(scene, camera);
+      };
+      animate();
+    }, undefined, (error) => {
+      console.error('An error occurred loading the sun model:', error);
+    });
+
+    // Add a reference cube to ensure visibility
+    const geometry = new THREE.BoxGeometry();
+    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
 
     // Add planets
     for (const body in positions) {
@@ -35,7 +84,9 @@ export default function ThreeDScene({ positions }) {
       scene.add(planet);
     }
 
-    camera.position.z = 5;
+    // Camera setup
+    camera.position.set(0, 0, 5);
+    camera.lookAt(0, 0, 0); // Ensure camera is looking at the center
 
     // Animation loop
     const animate = function () {
@@ -44,8 +95,8 @@ export default function ThreeDScene({ positions }) {
     };
     animate();
 
+    // Cleanup
     return () => {
-      // Cleanup
       document.body.removeChild(renderer.domElement);
     };
   }, [positions]);
