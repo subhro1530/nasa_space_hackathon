@@ -1,105 +1,203 @@
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { useEffect } from 'react';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import dynamic from 'next/dynamic';
 
-export default function ThreeDScene({ positions }) {
+export default function SolarSystem() {
+  const mountRef = useRef(null);
+  const [DatGUI, setDatGUI] = useState(null);
+
   useEffect(() => {
+    // Ensure window exists (browser environment)
+    if (typeof window === 'undefined') return;
+
+    // Dynamically import dat.gui on client-side
+    const loadDatGui = async () => {
+      const dat = await import('dat.gui');
+      setDatGUI(dat);
+    };
+
+    loadDatGui();
+
     // Scene setup
     const scene = new THREE.Scene();
+
+    // Renderer setup
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    mountRef.current.appendChild(renderer.domElement);
+
+    // Camera setup
     const camera = new THREE.PerspectiveCamera(
       75,
       window.innerWidth / window.innerHeight,
       0.1,
       1000
     );
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    camera.position.set(-50, 90, 150);
 
-    // Add ambient light
-    const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
+    // Orbit Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+
+    // Texture loader
+    const textureLoader = new THREE.TextureLoader();
+
+    // Load textures
+    const starTexture = textureLoader.load('/textures/stars.jpg');
+    const sunTexture = textureLoader.load('/textures/sun.jpg');
+    const mercuryTexture = textureLoader.load('/textures/mercury.jpg');
+    const venusTexture = textureLoader.load('/textures/venus.jpg');
+    const earthTexture = textureLoader.load('/textures/earth.jpg');
+    const marsTexture = textureLoader.load('/textures/mars.jpg');
+    const jupiterTexture = textureLoader.load('/textures/jupiter.jpg');
+    const saturnTexture = textureLoader.load('/textures/saturn.jpg');
+    const uranusTexture = textureLoader.load('/textures/uranus.jpg');
+    const neptuneTexture = textureLoader.load('/textures/neptune.jpg');
+    const plutoTexture = textureLoader.load('/textures/pluto.jpg');
+    const saturnRingTexture = textureLoader.load('/textures/saturn_ring.png');
+    const uranusRingTexture = textureLoader.load('/textures/uranus_ring.png');
+
+    // Background texture
+    const cubeTextureLoader = new THREE.CubeTextureLoader();
+    const cubeTexture = cubeTextureLoader.load([
+      '/textures/stars.jpg',
+      '/textures/stars.jpg',
+      '/textures/stars.jpg',
+      '/textures/stars.jpg',
+      '/textures/stars.jpg',
+      '/textures/stars.jpg',
+    ]);
+    scene.background = cubeTexture;
+
+    // Sun
+    const sunGeometry = new THREE.SphereGeometry(15, 50, 50);
+    const sunMaterial = new THREE.MeshBasicMaterial({
+      map: sunTexture,
+    });
+    const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+    scene.add(sun);
+
+    // Sunlight
+    const sunLight = new THREE.PointLight(0xffffff, 4, 300);
+    scene.add(sunLight);
+
+    // Ambient Light
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0);
     scene.add(ambientLight);
 
-    // Add directional light with higher intensity
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // Increased intensity
-    directionalLight.position.set(5, 5, 5).normalize();
-    scene.add(directionalLight);
-
-    // Optional: Add a light helper to visualize the light
-    const lightHelper = new THREE.DirectionalLightHelper(directionalLight, 5);
-    scene.add(lightHelper);
-
-    // Load and add the sun model
-    const loader = new GLTFLoader();
-    loader.load('/models/sun.glb', (gltf) => {
-      const sun = gltf.scene;
-
-      // Check and log model materials
-      sun.traverse((child) => {
-        if (child.isMesh) {
-          console.log('Material:', child.material);
-          // Ensure materials are set up correctly
-          if (child.material.map === null) {
-            child.material.color.set(0xffff00); // Default to yellow if no texture
-          }
-          // Ensure material is not using `MeshBasicMaterial` if lighting is used
-          if (child.material instanceof THREE.MeshBasicMaterial) {
-            child.material = new THREE.MeshStandardMaterial({ color: 0xffff00 });
-          }
-        }
+    // Function to create a circular path for planets
+    const path_of_planets = [];
+    function createLineLoopWithMesh(radius, color, width) {
+      const material = new THREE.LineBasicMaterial({
+        color: color,
+        linewidth: width,
       });
+      const geometry = new THREE.BufferGeometry();
+      const lineLoopPoints = [];
 
-      sun.position.set(0, 0, 0);
-      sun.scale.set(1, 1, 1);
-      scene.add(sun);
+      const numSegments = 100;
+      for (let i = 0; i <= numSegments; i++) {
+        const angle = (i / numSegments) * Math.PI * 2;
+        const x = radius * Math.cos(angle);
+        const z = radius * Math.sin(angle);
+        lineLoopPoints.push(x, 0, z);
+      }
 
-      // Rotatable sun
-      const animate = function () {
-        requestAnimationFrame(animate);
-        sun.rotation.y += 0.01; // Rotate the sun around the y-axis
-        renderer.render(scene, camera);
-      };
-      animate();
-    }, undefined, (error) => {
-      console.error('An error occurred loading the sun model:', error);
-    });
-
-    // Add a reference cube to ensure visibility
-    const geometry = new THREE.BoxGeometry();
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
-
-    // Add planets
-    for (const body in positions) {
-      const planetGeometry = new THREE.SphereGeometry(0.1, 32, 32);
-      const planetMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const planet = new THREE.Mesh(planetGeometry, planetMaterial);
-      const { radius, angle } = positions[body];
-      planet.position.set(
-        radius * Math.cos(angle),
-        0,
-        radius * Math.sin(angle)
+      geometry.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(lineLoopPoints, 3)
       );
-      scene.add(planet);
+      const lineLoop = new THREE.LineLoop(geometry, material);
+      scene.add(lineLoop);
+      path_of_planets.push(lineLoop);
     }
 
-    // Camera setup
-    camera.position.set(0, 0, 5);
-    camera.lookAt(0, 0, 0); // Ensure camera is looking at the center
+    // Function to generate planets
+    const generatePlanet = (size, texture, x, ring) => {
+      const planetGeometry = new THREE.SphereGeometry(size, 50, 50);
+      const planetMaterial = new THREE.MeshStandardMaterial({
+        map: texture,
+      });
+      const planet = new THREE.Mesh(planetGeometry, planetMaterial);
+      const planetObj = new THREE.Object3D();
+      planet.position.set(x, 0, 0);
 
-    // Animation loop
-    const animate = function () {
-      requestAnimationFrame(animate);
+      if (ring) {
+        const ringGeometry = new THREE.RingGeometry(
+          ring.innerRadius,
+          ring.outerRadius,
+          32
+        );
+        const ringMaterial = new THREE.MeshBasicMaterial({
+          map: ring.texture,
+          side: THREE.DoubleSide,
+        });
+        const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+        planetObj.add(ringMesh);
+        ringMesh.position.set(x, 0, 0);
+        ringMesh.rotation.x = -0.5 * Math.PI;
+      }
+
+      scene.add(planetObj);
+      planetObj.add(planet);
+      createLineLoopWithMesh(x, 0xffffff, 3);
+
+      return {
+        planetObj,
+        planet,
+      };
+    };
+
+    // Planets setup
+    const planets = [
+      generatePlanet(3.2, mercuryTexture, 28),
+      generatePlanet(5.8, venusTexture, 44),
+      generatePlanet(6, earthTexture, 62),
+      generatePlanet(4, marsTexture, 78),
+      generatePlanet(12, jupiterTexture, 100),
+      generatePlanet(10, saturnTexture, 138, {
+        innerRadius: 10,
+        outerRadius: 20,
+        texture: saturnRingTexture,
+      }),
+      generatePlanet(7, uranusTexture, 176, {
+        innerRadius: 7,
+        outerRadius: 12,
+        texture: uranusRingTexture,
+      }),
+      generatePlanet(7, neptuneTexture, 200),
+      generatePlanet(2.8, plutoTexture, 216),
+    ];
+
+    // Animate the scene
+    const animate = () => {
+      sun.rotateY(0.004);
+      planets.forEach((planetData) => {
+        planetData.planetObj.rotateY(0.004); // Rotation around sun
+        planetData.planet.rotateY(0.01); // Planet self-rotation
+      });
+
       renderer.render(scene, camera);
     };
-    animate();
+    renderer.setAnimationLoop(animate);
 
-    // Cleanup
-    return () => {
-      document.body.removeChild(renderer.domElement);
+    // Handle window resizing
+    const handleResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
     };
-  }, [positions]);
+    window.addEventListener('resize', handleResize);
 
-  return null;
+    // Cleanup function
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (DatGUI) {
+        DatGUI.destroy(); // Ensure GUI is destroyed
+      }
+      mountRef.current.removeChild(renderer.domElement);
+    };
+  }, [DatGUI]);
+
+  return <div ref={mountRef} />;
 }
